@@ -1,0 +1,13 @@
+[package]
+name = "yoinkerd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Yoinker clipboard manager daemon"
+
+[dependencies]
+yoinker-common = { path = "../yoinker-common" }
+tokio = { version = "1", features = ["full"] }
+wl-clipboard-rs = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

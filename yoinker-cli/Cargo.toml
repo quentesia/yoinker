@@ -1,0 +1,20 @@
+[package]
+name = "yoinker-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI client for yoinker clipboard manager"
+
+[[bin]]
+name = "yoinker"
+path = "src/main.rs"
+
+[dependencies]
+yoinker-common = { path = "../yoinker-common" }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.28"
+fuzzy-matcher = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
