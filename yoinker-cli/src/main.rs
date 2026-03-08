@@ -1,8 +1,11 @@
+mod ipc;
+mod tui;
+
 use clap::{Parser, Subcommand};
-use yoinker_common::Config;
+use yoinker_common::{Config, EntryContent, Request, Response};
 
 #[derive(Parser)]
-#[command(name = "yoinker", about = "Terminal clipboard manager for Wayland")]
+#[command(name = "yoinker", about = "Terminal clipboard manager for Linux")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -14,7 +17,7 @@ enum Commands {
     List,
     /// Print nth clipboard item to stdout
     Get {
-        /// Index of the clipboard entry
+        /// Index of the clipboard entry (0 = most recent)
         index: usize,
     },
     /// Pin a clipboard entry so it never expires
@@ -42,27 +45,80 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let _config = Config::load();
+    let config = Config::load();
 
-    // TODO: Connect to daemon via Unix socket and send commands
     match cli.command {
         Commands::List => {
-            println!("TODO: launch TUI");
+            let resp = ipc::send(&config, Request::List).await;
+            match resp {
+                Ok(Response::Entries(entries)) => {
+                    if entries.is_empty() {
+                        eprintln!("clipboard history is empty");
+                        return;
+                    }
+                    match tui::run(entries, &config).await {
+                        Ok(Some(index)) => {
+                            // Tell the daemon to copy it to clipboard (daemon holds it alive)
+                            match ipc::send(&config, Request::Copy { index }).await {
+                                Ok(Response::Ok) => {}
+                                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                                Err(e) => eprintln!("connection error: {}", e),
+                                _ => eprintln!("unexpected response"),
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => eprintln!("TUI error: {}", e),
+                    }
+                }
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
         Commands::Get { index } => {
-            println!("TODO: get entry {index}");
+            match ipc::send(&config, Request::Get { index }).await {
+                Ok(Response::Entry(entry)) => match &entry.content {
+                    EntryContent::Text { text } => print!("{}", text),
+                    EntryContent::Image { .. } => {
+                        eprintln!("[image data - use 'list' to select]")
+                    }
+                },
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
         Commands::Pin { index } => {
-            println!("TODO: pin entry {index}");
+            match ipc::send(&config, Request::Pin { index }).await {
+                Ok(Response::Ok) => eprintln!("pinned entry {}", index),
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
         Commands::Unpin { index } => {
-            println!("TODO: unpin entry {index}");
+            match ipc::send(&config, Request::Unpin { index }).await {
+                Ok(Response::Ok) => eprintln!("unpinned entry {}", index),
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
         Commands::Clear => {
-            println!("TODO: clear history");
+            match ipc::send(&config, Request::Clear).await {
+                Ok(Response::Ok) => eprintln!("cleared unpinned history"),
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
         Commands::Store { content, pin } => {
-            println!("TODO: store '{content}' (pin={pin})");
+            match ipc::send(&config, Request::Store { content, pin }).await {
+                Ok(Response::Ok) => eprintln!("stored"),
+                Ok(Response::Error(e)) => eprintln!("error: {}", e),
+                Err(e) => eprintln!("connection error: {}", e),
+                _ => eprintln!("unexpected response"),
+            }
         }
     }
 }
