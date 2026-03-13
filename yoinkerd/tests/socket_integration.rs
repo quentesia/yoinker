@@ -91,8 +91,25 @@ async fn start_test_server(
                             content: EntryContent::Text { text: content },
                             timestamp: 0,
                             pinned: pin,
+                            tag: None,
                         });
                         Response::Ok
+                    }
+                    Request::Tag { index, tag } => {
+                        if let Some(entry) = entries.get_mut(index) {
+                            entry.tag = tag;
+                            Response::Ok
+                        } else {
+                            Response::Error(format!("index {} out of range", index))
+                        }
+                    }
+                    Request::Delete { index } => {
+                        if index < entries.len() {
+                            entries.remove(index);
+                            Response::Ok
+                        } else {
+                            Response::Error(format!("index {} out of range", index))
+                        }
                     }
                     Request::Copy { index } => {
                         if index < entries.len() {

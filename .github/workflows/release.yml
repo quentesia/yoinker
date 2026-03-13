@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binaries
+        run: cargo build --workspace --release
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/release/yoinkerd dist/
+          cp target/release/yoinker dist/
+          cp contrib/yoinkerd.service dist/
+          cp config.example.toml dist/
+          cp README.md dist/
+          cp LICENSE dist/
+          tar czf yoinker-x86_64-linux.tar.gz -C dist .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: yoinker-x86_64-linux.tar.gz
+          generate_release_notes: true

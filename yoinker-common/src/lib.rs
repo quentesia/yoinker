@@ -60,6 +60,8 @@ pub struct ClipboardEntry {
     pub content: EntryContent,
     pub timestamp: u64,
     pub pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -121,6 +123,10 @@ pub enum Request {
     Store { content: String, pin: bool },
     /// Copy entry at index to the system clipboard (daemon holds it alive)
     Copy { index: usize },
+    /// Delete entry at index
+    Delete { index: usize },
+    /// Set or clear a tag on an entry (None to remove tag)
+    Tag { index: usize, tag: Option<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -234,6 +240,7 @@ mod tests {
             content: EntryContent::Text { text: "hello world".into() },
             timestamp: 1234567890,
             pinned: true,
+            tag: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let back: ClipboardEntry = serde_json::from_str(&json).unwrap();
@@ -253,6 +260,7 @@ mod tests {
             content: EntryContent::Image { width: 64, height: 32, bytes: vec![255, 0, 128] },
             timestamp: 999,
             pinned: false,
+            tag: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let back: ClipboardEntry = serde_json::from_str(&json).unwrap();
@@ -278,6 +286,9 @@ mod tests {
             Request::Clear,
             Request::Store { content: "test".into(), pin: true },
             Request::Copy { index: 5 },
+            Request::Delete { index: 2 },
+            Request::Tag { index: 0, tag: Some("email".into()) },
+            Request::Tag { index: 1, tag: None },
         ];
         for req in requests {
             let json = serde_json::to_string(&req).unwrap();
@@ -297,6 +308,7 @@ mod tests {
                 content: EntryContent::Text { text: "x".into() },
                 timestamp: 0,
                 pinned: false,
+                tag: None,
             }),
             Response::Entries(vec![]),
         ];
@@ -358,6 +370,7 @@ mod tests {
             content: EntryContent::Text { text: "日本語 emoji: 🎉🚀 → ← ñ ü".into() },
             timestamp: 0,
             pinned: false,
+            tag: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let back: ClipboardEntry = serde_json::from_str(&json).unwrap();

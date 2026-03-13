@@ -1,18 +1,18 @@
 [package]
-name = "yoinkerd"
+name = "yoinker-gui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Yoinker clipboard manager daemon"
+description = "GUI clipboard picker for yoinker"
+
+[[bin]]
+name = "yoinker-gui"
+path = "src/main.rs"
 
 [dependencies]
 yoinker-common = { path = "../yoinker-common" }
+eframe = "0.31"
+egui = "0.31"
 tokio = { version = "1", features = ["full"] }
-arboard = "3"
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-
-[dev-dependencies]
-tempfile = "3"
+libc = "0.2"

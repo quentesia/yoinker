@@ -1,5 +1,5 @@
 [workspace]
-members = ["yoinker-common", "yoinkerd", "yoinker-cli"]
+members = ["yoinker-common", "yoinkerd", "yoinker-cli", "yoinker-gui"]
 resolver = "2"
 
 [workspace.package]

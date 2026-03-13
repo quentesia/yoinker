@@ -6,6 +6,7 @@ pub struct ClipboardHistory {
     pub config: Config,
     next_id: u64,
     last_hash: u64,
+    dirty: bool,
 }
 
 impl ClipboardHistory {
@@ -29,15 +30,26 @@ impl ClipboardHistory {
             config: config.clone(),
             next_id,
             last_hash,
+            dirty: false,
         }
     }
 
-    pub fn save(&self) {
+    pub fn save(&mut self) {
         if let Some(parent) = self.config.history_path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
         if let Ok(data) = serde_json::to_string_pretty(&self.entries) {
-            std::fs::write(&self.config.history_path, data).ok();
+            let tmp_path = self.config.history_path.with_extension("json.tmp");
+            if std::fs::write(&tmp_path, &data).is_ok() {
+                std::fs::rename(&tmp_path, &self.config.history_path).ok();
+            }
+        }
+        self.dirty = false;
+    }
+
+    pub fn save_if_dirty(&mut self) {
+        if self.dirty {
+            self.save();
         }
     }
 
@@ -60,20 +72,41 @@ impl ClipboardHistory {
                 content,
                 timestamp: now(),
                 pinned: false,
+                tag: None,
             };
             self.next_id += 1;
             self.entries.insert(0, entry);
         }
 
         self.trim();
-        self.save();
+        self.dirty = true;
         true
+    }
+
+    pub fn set_tag(&mut self, index: usize, tag: Option<String>) -> bool {
+        if let Some(entry) = self.entries.get_mut(index) {
+            entry.tag = tag;
+            self.dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn delete(&mut self, index: usize) -> bool {
+        if index < self.entries.len() {
+            self.entries.remove(index);
+            self.dirty = true;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn pin(&mut self, index: usize) -> bool {
         if let Some(entry) = self.entries.get_mut(index) {
             entry.pinned = true;
-            self.save();
+            self.dirty = true;
             true
         } else {
             false
@@ -83,7 +116,7 @@ impl ClipboardHistory {
     pub fn unpin(&mut self, index: usize) -> bool {
         if let Some(entry) = self.entries.get_mut(index) {
             entry.pinned = false;
-            self.save();
+            self.dirty = true;
             true
         } else {
             false
@@ -92,7 +125,7 @@ impl ClipboardHistory {
 
     pub fn clear_unpinned(&mut self) {
         self.entries.retain(|e| e.pinned);
-        self.save();
+        self.dirty = true;
     }
 
     fn trim(&mut self) {
@@ -387,7 +420,7 @@ mod tests {
             h.add(text("persisted1"));
             h.add(text("persisted2"));
             h.pin(0);
-            // save happens automatically in add/pin
+            h.save();
         }
 
         let h = ClipboardHistory::load(&config);
@@ -426,7 +459,7 @@ mod tests {
             let mut h = ClipboardHistory::load(&config);
             h.add(text("a"));
             h.add(text("b"));
-            // ids should be 1, 2
+            h.save();
         }
 
         let mut h = ClipboardHistory::load(&config);

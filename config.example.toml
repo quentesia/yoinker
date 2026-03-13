@@ -1,0 +1,19 @@
+# Yoinker configuration
+# Place this file at: ~/.config/yoinker/config.toml
+
+# Maximum number of unpinned clipboard entries to keep
+max_history = 50
+
+# Path to the history file (JSON)
+# Default: ~/.local/share/yoinker/history.json
+# history_path = "/home/user/.local/share/yoinker/history.json"
+
+# Path to the Unix domain socket for IPC
+# Default: $XDG_RUNTIME_DIR/yoinker.sock
+# socket_path = "/run/user/1000/yoinker.sock"
+
+# Clipboard polling interval in milliseconds
+poll_interval_ms = 500
+
+# Maximum size in bytes for a single clipboard entry (0 = unlimited)
+max_entry_bytes = 10485760

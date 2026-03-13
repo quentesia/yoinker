@@ -4,24 +4,25 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
+use tracing::{error, info};
 use yoinker_common::{Config, EntryContent, Request, Response};
 
 pub async fn run(history: Arc<Mutex<ClipboardHistory>>, config: Config) {
     let listener = match UnixListener::bind(&config.socket_path) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("yoinkerd: failed to bind socket {:?}: {}", config.socket_path, e);
+            error!("failed to bind socket {:?}: {}", config.socket_path, e);
             return;
         }
     };
 
-    eprintln!("yoinkerd: listening on {:?}", config.socket_path);
+    info!("listening on {:?}", config.socket_path);
 
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
             Err(e) => {
-                eprintln!("yoinkerd: accept error: {}", e);
+                error!("accept error: {}", e);
                 continue;
             }
         };
@@ -89,6 +90,20 @@ async fn handle_request(
                 history.pin(0);
             }
             Response::Ok
+        }
+        Request::Tag { index, tag } => {
+            if history.set_tag(index, tag) {
+                Response::Ok
+            } else {
+                Response::Error(format!("index {} out of range", index))
+            }
+        }
+        Request::Delete { index } => {
+            if history.delete(index) {
+                Response::Ok
+            } else {
+                Response::Error(format!("index {} out of range", index))
+            }
         }
         Request::Copy { index } => {
             if let Some(entry) = history.entries.get(index) {
