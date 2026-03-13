@@ -23,7 +23,10 @@ impl ClipboardHistory {
             }
         }
 
-        let last_hash = entries.first().map(|e| e.content.content_hash()).unwrap_or(0);
+        let last_hash = entries
+            .first()
+            .map(|e| e.content.content_hash())
+            .unwrap_or(0);
 
         Self {
             entries,
@@ -62,7 +65,11 @@ impl ClipboardHistory {
         self.last_hash = hash;
 
         // If this content already exists, move it to the front
-        if let Some(pos) = self.entries.iter().position(|e| e.content.content_hash() == hash) {
+        if let Some(pos) = self
+            .entries
+            .iter()
+            .position(|e| e.content.content_hash() == hash)
+        {
             let mut entry = self.entries.remove(pos);
             entry.timestamp = now();
             self.entries.insert(0, entry);
@@ -189,7 +196,9 @@ mod tests {
     }
 
     fn text(s: &str) -> EntryContent {
-        EntryContent::Text { text: s.to_string() }
+        EntryContent::Text {
+            text: s.to_string(),
+        }
     }
 
     // --- Basic add/get ---
@@ -282,10 +291,14 @@ mod tests {
         h.add(text("4")); // should trim "1" (oldest)
         assert_eq!(h.entries.len(), 3);
         // Should have 4, 3, 2
-        let texts: Vec<_> = h.entries.iter().map(|e| match &e.content {
-            EntryContent::Text { text } => text.clone(),
-            _ => panic!(),
-        }).collect();
+        let texts: Vec<_> = h
+            .entries
+            .iter()
+            .map(|e| match &e.content {
+                EntryContent::Text { text } => text.clone(),
+                _ => panic!(),
+            })
+            .collect();
         assert_eq!(texts, vec!["4", "3", "2"]);
     }
 
@@ -297,7 +310,7 @@ mod tests {
         h.add(text("2"));
         h.add(text("3"));
         h.add(text("4")); // trim, but "1" is pinned
-        // Pinned "1" must survive, plus 2 newest unpinned
+                          // Pinned "1" must survive, plus 2 newest unpinned
         let pinned_count = h.entries.iter().filter(|e| e.pinned).count();
         assert_eq!(pinned_count, 1);
         // Total: pinned "1" + 2 unpinned = 3
@@ -473,11 +486,19 @@ mod tests {
     #[test]
     fn add_image_entry() {
         let (mut h, _tmp) = make_history(10);
-        let img = EntryContent::Image { width: 2, height: 2, bytes: vec![0, 1, 2, 3] };
+        let img = EntryContent::Image {
+            width: 2,
+            height: 2,
+            bytes: vec![0, 1, 2, 3],
+        };
         assert!(h.add(img));
         assert_eq!(h.entries.len(), 1);
         match &h.entries[0].content {
-            EntryContent::Image { width, height, bytes } => {
+            EntryContent::Image {
+                width,
+                height,
+                bytes,
+            } => {
                 assert_eq!(*width, 2);
                 assert_eq!(*height, 2);
                 assert_eq!(bytes, &vec![0, 1, 2, 3]);
@@ -489,8 +510,16 @@ mod tests {
     #[test]
     fn duplicate_image_rejected() {
         let (mut h, _tmp) = make_history(10);
-        let img1 = EntryContent::Image { width: 1, height: 1, bytes: vec![42] };
-        let img2 = EntryContent::Image { width: 1, height: 1, bytes: vec![42] };
+        let img1 = EntryContent::Image {
+            width: 1,
+            height: 1,
+            bytes: vec![42],
+        };
+        let img2 = EntryContent::Image {
+            width: 1,
+            height: 1,
+            bytes: vec![42],
+        };
         assert!(h.add(img1));
         assert!(!h.add(img2));
         assert_eq!(h.entries.len(), 1);
@@ -500,7 +529,11 @@ mod tests {
     fn mixed_text_and_image() {
         let (mut h, _tmp) = make_history(10);
         h.add(text("hello"));
-        h.add(EntryContent::Image { width: 1, height: 1, bytes: vec![1] });
+        h.add(EntryContent::Image {
+            width: 1,
+            height: 1,
+            bytes: vec![1],
+        });
         h.add(text("world"));
         assert_eq!(h.entries.len(), 3);
     }

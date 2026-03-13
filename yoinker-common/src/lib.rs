@@ -67,8 +67,14 @@ pub struct ClipboardEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum EntryContent {
-    Text { text: String },
-    Image { width: usize, height: usize, bytes: Vec<u8> },
+    Text {
+        text: String,
+    },
+    Image {
+        width: usize,
+        height: usize,
+        bytes: Vec<u8>,
+    },
 }
 
 impl EntryContent {
@@ -82,7 +88,11 @@ impl EntryContent {
                     format!("{}...", &s[..max_len])
                 }
             }
-            EntryContent::Image { width, height, bytes } => {
+            EntryContent::Image {
+                width,
+                height,
+                bytes,
+            } => {
                 format!("[image: {}x{}, {} bytes]", width, height, bytes.len())
             }
         }
@@ -116,17 +126,33 @@ impl EntryContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Request {
     List,
-    Get { index: usize },
-    Pin { index: usize },
-    Unpin { index: usize },
+    Get {
+        index: usize,
+    },
+    Pin {
+        index: usize,
+    },
+    Unpin {
+        index: usize,
+    },
     Clear,
-    Store { content: String, pin: bool },
+    Store {
+        content: String,
+        pin: bool,
+    },
     /// Copy entry at index to the system clipboard (daemon holds it alive)
-    Copy { index: usize },
+    Copy {
+        index: usize,
+    },
     /// Delete entry at index
-    Delete { index: usize },
+    Delete {
+        index: usize,
+    },
     /// Set or clear a tag on an entry (None to remove tag)
-    Tag { index: usize, tag: Option<String> },
+    Tag {
+        index: usize,
+        tag: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -156,13 +182,17 @@ mod tests {
 
     #[test]
     fn text_preview_short() {
-        let c = EntryContent::Text { text: "hello".into() };
+        let c = EntryContent::Text {
+            text: "hello".into(),
+        };
         assert_eq!(c.preview(10), "hello");
     }
 
     #[test]
     fn text_preview_truncated() {
-        let c = EntryContent::Text { text: "hello world this is long".into() };
+        let c = EntryContent::Text {
+            text: "hello world this is long".into(),
+        };
         let p = c.preview(10);
         assert!(p.ends_with("..."));
         assert!(p.len() <= 13); // 10 + "..."
@@ -170,7 +200,9 @@ mod tests {
 
     #[test]
     fn text_preview_newlines_escaped() {
-        let c = EntryContent::Text { text: "line1\nline2\nline3".into() };
+        let c = EntryContent::Text {
+            text: "line1\nline2\nline3".into(),
+        };
         let p = c.preview(100);
         assert!(!p.contains('\n'));
         assert!(p.contains("\\n"));
@@ -178,7 +210,11 @@ mod tests {
 
     #[test]
     fn image_preview() {
-        let c = EntryContent::Image { width: 100, height: 200, bytes: vec![0; 5000] };
+        let c = EntryContent::Image {
+            width: 100,
+            height: 200,
+            bytes: vec![0; 5000],
+        };
         let p = c.preview(100);
         assert!(p.contains("100x200"));
         assert!(p.contains("5000"));
@@ -186,48 +222,82 @@ mod tests {
 
     #[test]
     fn text_content_hash_deterministic() {
-        let a = EntryContent::Text { text: "same".into() };
-        let b = EntryContent::Text { text: "same".into() };
+        let a = EntryContent::Text {
+            text: "same".into(),
+        };
+        let b = EntryContent::Text {
+            text: "same".into(),
+        };
         assert_eq!(a.content_hash(), b.content_hash());
     }
 
     #[test]
     fn text_content_hash_differs() {
-        let a = EntryContent::Text { text: "hello".into() };
-        let b = EntryContent::Text { text: "world".into() };
+        let a = EntryContent::Text {
+            text: "hello".into(),
+        };
+        let b = EntryContent::Text {
+            text: "world".into(),
+        };
         assert_ne!(a.content_hash(), b.content_hash());
     }
 
     #[test]
     fn text_vs_image_hash_differs() {
         let t = EntryContent::Text { text: "".into() };
-        let i = EntryContent::Image { width: 0, height: 0, bytes: vec![] };
+        let i = EntryContent::Image {
+            width: 0,
+            height: 0,
+            bytes: vec![],
+        };
         assert_ne!(t.content_hash(), i.content_hash());
     }
 
     #[test]
     fn image_content_hash_deterministic() {
-        let a = EntryContent::Image { width: 10, height: 10, bytes: vec![1, 2, 3] };
-        let b = EntryContent::Image { width: 10, height: 10, bytes: vec![1, 2, 3] };
+        let a = EntryContent::Image {
+            width: 10,
+            height: 10,
+            bytes: vec![1, 2, 3],
+        };
+        let b = EntryContent::Image {
+            width: 10,
+            height: 10,
+            bytes: vec![1, 2, 3],
+        };
         assert_eq!(a.content_hash(), b.content_hash());
     }
 
     #[test]
     fn image_content_hash_differs_on_bytes() {
-        let a = EntryContent::Image { width: 10, height: 10, bytes: vec![1, 2, 3] };
-        let b = EntryContent::Image { width: 10, height: 10, bytes: vec![4, 5, 6] };
+        let a = EntryContent::Image {
+            width: 10,
+            height: 10,
+            bytes: vec![1, 2, 3],
+        };
+        let b = EntryContent::Image {
+            width: 10,
+            height: 10,
+            bytes: vec![4, 5, 6],
+        };
         assert_ne!(a.content_hash(), b.content_hash());
     }
 
     #[test]
     fn byte_len_text() {
-        let c = EntryContent::Text { text: "hello".into() };
+        let c = EntryContent::Text {
+            text: "hello".into(),
+        };
         assert_eq!(c.byte_len(), 5);
     }
 
     #[test]
     fn byte_len_image() {
-        let c = EntryContent::Image { width: 1, height: 1, bytes: vec![0; 100] };
+        let c = EntryContent::Image {
+            width: 1,
+            height: 1,
+            bytes: vec![0; 100],
+        };
         assert_eq!(c.byte_len(), 100);
     }
 
@@ -237,7 +307,9 @@ mod tests {
     fn text_entry_serialization_roundtrip() {
         let entry = ClipboardEntry {
             id: 42,
-            content: EntryContent::Text { text: "hello world".into() },
+            content: EntryContent::Text {
+                text: "hello world".into(),
+            },
             timestamp: 1234567890,
             pinned: true,
             tag: None,
@@ -257,7 +329,11 @@ mod tests {
     fn image_entry_serialization_roundtrip() {
         let entry = ClipboardEntry {
             id: 7,
-            content: EntryContent::Image { width: 64, height: 32, bytes: vec![255, 0, 128] },
+            content: EntryContent::Image {
+                width: 64,
+                height: 32,
+                bytes: vec![255, 0, 128],
+            },
             timestamp: 999,
             pinned: false,
             tag: None,
@@ -267,7 +343,11 @@ mod tests {
         assert_eq!(back.id, 7);
         assert!(!back.pinned);
         match back.content {
-            EntryContent::Image { width, height, bytes } => {
+            EntryContent::Image {
+                width,
+                height,
+                bytes,
+            } => {
                 assert_eq!(width, 64);
                 assert_eq!(height, 32);
                 assert_eq!(bytes, vec![255, 0, 128]);
@@ -284,11 +364,20 @@ mod tests {
             Request::Pin { index: 0 },
             Request::Unpin { index: 1 },
             Request::Clear,
-            Request::Store { content: "test".into(), pin: true },
+            Request::Store {
+                content: "test".into(),
+                pin: true,
+            },
             Request::Copy { index: 5 },
             Request::Delete { index: 2 },
-            Request::Tag { index: 0, tag: Some("email".into()) },
-            Request::Tag { index: 1, tag: None },
+            Request::Tag {
+                index: 0,
+                tag: Some("email".into()),
+            },
+            Request::Tag {
+                index: 1,
+                tag: None,
+            },
         ];
         for req in requests {
             let json = serde_json::to_string(&req).unwrap();
@@ -367,7 +456,9 @@ mod tests {
     fn unicode_text_roundtrip() {
         let entry = ClipboardEntry {
             id: 1,
-            content: EntryContent::Text { text: "日本語 emoji: 🎉🚀 → ← ñ ü".into() },
+            content: EntryContent::Text {
+                text: "日本語 emoji: 🎉🚀 → ← ñ ü".into(),
+            },
             timestamp: 0,
             pinned: false,
             tag: None,
@@ -400,7 +491,9 @@ mod tests {
 
     #[test]
     fn multiline_text_preview() {
-        let c = EntryContent::Text { text: "fn main() {\n    println!(\"hello\");\n}".into() };
+        let c = EntryContent::Text {
+            text: "fn main() {\n    println!(\"hello\");\n}".into(),
+        };
         let p = c.preview(100);
         assert!(p.contains("\\n"));
         assert!(p.contains("fn main()"));

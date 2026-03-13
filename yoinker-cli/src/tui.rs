@@ -210,9 +210,7 @@ async fn run_loop(
                                 } else {
                                     Request::Pin { index: idx }
                                 };
-                                if let Ok(Response::Ok) =
-                                    crate::ipc::send(config, req).await
-                                {
+                                if let Ok(Response::Ok) = crate::ipc::send(config, req).await {
                                     entries[idx].pinned = !pinned;
                                 }
                             }
@@ -228,16 +226,10 @@ async fn run_loop(
                                     crate::ipc::send(config, Request::Delete { index: idx }).await
                                 {
                                     entries.remove(idx);
-                                    // Clamp selection after removal
-                                    if !entries.is_empty() {
-                                        let new_sel = sel.min(entries.len() - 1);
-                                        list_state.select(Some(new_sel));
-                                    } else {
-                                        list_state.select(None);
-                                    }
                                     if entries.is_empty() {
                                         return Ok(None);
                                     }
+                                    // Let the clamp logic at loop top fix selection
                                 }
                             }
                         }

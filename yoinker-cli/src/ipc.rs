@@ -5,7 +5,12 @@ use yoinker_common::{Config, Request, Response};
 pub async fn send(config: &Config, request: Request) -> Result<Response, String> {
     let stream = UnixStream::connect(&config.socket_path)
         .await
-        .map_err(|e| format!("cannot connect to yoinkerd at {:?}: {} (is the daemon running?)", config.socket_path, e))?;
+        .map_err(|e| {
+            format!(
+                "cannot connect to yoinkerd at {:?}: {} (is the daemon running?)",
+                config.socket_path, e
+            )
+        })?;
 
     let (reader, mut writer) = stream.into_split();
 
@@ -14,10 +19,7 @@ pub async fn send(config: &Config, request: Request) -> Result<Response, String>
         .write_all(json.as_bytes())
         .await
         .map_err(|e| e.to_string())?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|e| e.to_string())?;
+    writer.write_all(b"\n").await.map_err(|e| e.to_string())?;
     writer.shutdown().await.map_err(|e| e.to_string())?;
 
     let mut reader = BufReader::new(reader);

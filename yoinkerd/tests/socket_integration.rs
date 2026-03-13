@@ -86,13 +86,16 @@ async fn start_test_server(
                     }
                     Request::Store { content, pin } => {
                         let id = entries.len() as u64 + 1;
-                        entries.insert(0, ClipboardEntry {
-                            id,
-                            content: EntryContent::Text { text: content },
-                            timestamp: 0,
-                            pinned: pin,
-                            tag: None,
-                        });
+                        entries.insert(
+                            0,
+                            ClipboardEntry {
+                                id,
+                                content: EntryContent::Text { text: content },
+                                timestamp: 0,
+                                pinned: pin,
+                                tag: None,
+                            },
+                        );
                         Response::Ok
                     }
                     Request::Tag { index, tag } => {
@@ -140,16 +143,24 @@ async fn ipc_store_and_list() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // Store entries
-    let resp = send_request(&socket_path, &Request::Store {
-        content: "first".into(),
-        pin: false,
-    }).await;
+    let resp = send_request(
+        &socket_path,
+        &Request::Store {
+            content: "first".into(),
+            pin: false,
+        },
+    )
+    .await;
     assert_eq!(resp, Response::Ok);
 
-    let resp = send_request(&socket_path, &Request::Store {
-        content: "second".into(),
-        pin: false,
-    }).await;
+    let resp = send_request(
+        &socket_path,
+        &Request::Store {
+            content: "second".into(),
+            pin: false,
+        },
+    )
+    .await;
     assert_eq!(resp, Response::Ok);
 
     // List
@@ -176,7 +187,14 @@ async fn ipc_get_valid_index() {
     tokio::spawn(start_test_server(socket_path.clone(), Arc::clone(&entries)));
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    send_request(&socket_path, &Request::Store { content: "item0".into(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "item0".into(),
+            pin: false,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::Get { index: 0 }).await;
     match resp {
@@ -215,8 +233,22 @@ async fn ipc_pin_and_clear() {
     tokio::spawn(start_test_server(socket_path.clone(), Arc::clone(&entries)));
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    send_request(&socket_path, &Request::Store { content: "keep".into(), pin: false }).await;
-    send_request(&socket_path, &Request::Store { content: "delete".into(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "keep".into(),
+            pin: false,
+        },
+    )
+    .await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "delete".into(),
+            pin: false,
+        },
+    )
+    .await;
 
     // Pin first entry (index 0 = "delete" since it's newest)
     send_request(&socket_path, &Request::Pin { index: 0 }).await;
@@ -248,7 +280,14 @@ async fn ipc_unpin() {
     tokio::spawn(start_test_server(socket_path.clone(), Arc::clone(&entries)));
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    send_request(&socket_path, &Request::Store { content: "x".into(), pin: true }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "x".into(),
+            pin: true,
+        },
+    )
+    .await;
 
     // Verify pinned
     let resp = send_request(&socket_path, &Request::List).await;
@@ -277,7 +316,14 @@ async fn ipc_copy_valid_index() {
     tokio::spawn(start_test_server(socket_path.clone(), Arc::clone(&entries)));
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    send_request(&socket_path, &Request::Store { content: "copy me".into(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "copy me".into(),
+            pin: false,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::Copy { index: 0 }).await;
     assert_eq!(resp, Response::Ok);
@@ -310,7 +356,14 @@ async fn ipc_store_with_pin() {
     tokio::spawn(start_test_server(socket_path.clone(), Arc::clone(&entries)));
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    send_request(&socket_path, &Request::Store { content: "pinned!".into(), pin: true }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: "pinned!".into(),
+            pin: true,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::List).await;
     match resp {
@@ -380,10 +433,14 @@ async fn ipc_concurrent_requests() {
     for i in 0..10 {
         let sp = socket_path.clone();
         handles.push(tokio::spawn(async move {
-            send_request(&sp, &Request::Store {
-                content: format!("concurrent-{}", i),
-                pin: false,
-            }).await
+            send_request(
+                &sp,
+                &Request::Store {
+                    content: format!("concurrent-{}", i),
+                    pin: false,
+                },
+            )
+            .await
         }));
     }
 
@@ -441,7 +498,14 @@ async fn ipc_unicode_content() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let unicode = "日本語テスト 🎉 emojis → ← ñ";
-    send_request(&socket_path, &Request::Store { content: unicode.into(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: unicode.into(),
+            pin: false,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::Get { index: 0 }).await;
     match resp {
@@ -464,7 +528,14 @@ async fn ipc_multiline_content() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let multiline = "line1\nline2\nline3\n\ttabbed";
-    send_request(&socket_path, &Request::Store { content: multiline.into(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: multiline.into(),
+            pin: false,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::Get { index: 0 }).await;
     match resp {
@@ -487,7 +558,14 @@ async fn ipc_large_content() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let large = "x".repeat(100_000);
-    send_request(&socket_path, &Request::Store { content: large.clone(), pin: false }).await;
+    send_request(
+        &socket_path,
+        &Request::Store {
+            content: large.clone(),
+            pin: false,
+        },
+    )
+    .await;
 
     let resp = send_request(&socket_path, &Request::Get { index: 0 }).await;
     match resp {

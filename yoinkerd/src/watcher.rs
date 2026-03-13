@@ -20,7 +20,10 @@ pub async fn run(history: Arc<Mutex<ClipboardHistory>>, config: Config) {
                     c
                 }
                 Err(e) => {
-                    error!("failed to connect to clipboard: {}, retrying in {}s", e, backoff_secs);
+                    error!(
+                        "failed to connect to clipboard: {}, retrying in {}s",
+                        e, backoff_secs
+                    );
                     std::thread::sleep(std::time::Duration::from_secs(backoff_secs));
                     backoff_secs = (backoff_secs * 2).min(60);
                     continue;

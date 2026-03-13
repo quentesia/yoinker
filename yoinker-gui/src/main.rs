@@ -1,4 +1,6 @@
 use eframe::egui;
+use std::path::PathBuf;
+use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -7,16 +9,19 @@ use yoinker_common::{ClipboardEntry, Config, Request, Response};
 const LOCK_PATH: &str = "/tmp/yoinker-gui.lock";
 
 fn main() -> eframe::Result<()> {
-    // Single-instance toggle: if already running, kill it and exit
+    // Single-instance toggle: if already running, kill it and exit.
+    // If stale lock (process dead), remove and continue.
     if let Ok(pid_str) = std::fs::read_to_string(LOCK_PATH) {
         if let Ok(pid) = pid_str.trim().parse::<i32>() {
             if pid != std::process::id() as i32 {
-                // Check if it's alive
                 if unsafe { libc::kill(pid, 0) } == 0 {
                     // It's running — kill it (toggle off) and exit
                     unsafe { libc::kill(pid, libc::SIGTERM) };
                     std::fs::remove_file(LOCK_PATH).ok();
                     return Ok(());
+                } else {
+                    // Stale lock file from a crash — clean up
+                    std::fs::remove_file(LOCK_PATH).ok();
                 }
             }
         }
@@ -28,11 +33,11 @@ fn main() -> eframe::Result<()> {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let config = Config::load();
 
-    // Fetch entries from daemon
-    let entries = rt.block_on(async {
-        match send(&config, Request::List).await {
-            Ok(Response::Entries(e)) => e,
-            _ => Vec::new(),
+    // Fetch entries from daemon, auto-starting if needed
+    let (entries, daemon_error) = rt.block_on(async {
+        match send_with_autostart(&config).await {
+            Ok(entries) => (entries, None),
+            Err(e) => (Vec::new(), Some(e)),
         }
     });
 
@@ -50,7 +55,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             cc.egui_ctx.set_pixels_per_point(1.5);
-            Ok(Box::new(App::new(entries, config, rt)))
+            Ok(Box::new(App::new(entries, config, rt, daemon_error)))
         }),
     );
 
@@ -67,12 +72,18 @@ struct App {
     selected: usize,
     should_close: bool,
     first_frame: bool,
-    tagging: Option<usize>,  // index of entry being tagged
+    tagging: Option<usize>,
     tag_input: String,
+    daemon_error: Option<String>,
 }
 
 impl App {
-    fn new(entries: Vec<ClipboardEntry>, config: Config, rt: tokio::runtime::Runtime) -> Self {
+    fn new(
+        entries: Vec<ClipboardEntry>,
+        config: Config,
+        rt: tokio::runtime::Runtime,
+        daemon_error: Option<String>,
+    ) -> Self {
         Self {
             entries,
             config,
@@ -83,6 +94,7 @@ impl App {
             first_frame: true,
             tagging: None,
             tag_input: String::new(),
+            daemon_error,
         }
     }
 
@@ -118,23 +130,18 @@ impl App {
             } else {
                 false
             };
-            (if exact_tag { 0 } else if e.pinned { 1 } else { 2 }, i)
+            (
+                if exact_tag {
+                    0
+                } else if e.pinned {
+                    1
+                } else {
+                    2
+                },
+                i,
+            )
         });
         result
-    }
-
-    /// If query exactly matches a tag, return that entry's original index
-    fn exact_tag_match(&self) -> Option<usize> {
-        if self.query.is_empty() {
-            return None;
-        }
-        let query_lower = self.query.to_lowercase();
-        self.entries.iter().enumerate().find_map(|(i, e)| {
-            e.tag
-                .as_ref()
-                .filter(|t| t.to_lowercase() == query_lower)
-                .map(|_| i)
-        })
     }
 
     fn send_request(&self, req: Request) -> Option<Response> {
@@ -201,14 +208,10 @@ impl eframe::App for App {
         }
 
         // Read Tab state then consume Tab events so egui doesn't use them for focus cycling
-        let tab_down = ctx.input_mut(|i| {
-            let pressed = i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::Tab) > 0;
-            pressed
-        });
-        let tab_up = ctx.input_mut(|i| {
-            let pressed = i.count_and_consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) > 0;
-            pressed
-        });
+        let tab_down =
+            ctx.input_mut(|i| i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::Tab) > 0);
+        let tab_up =
+            ctx.input_mut(|i| i.count_and_consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) > 0);
 
         {
             let filtered = self.filtered_indices();
@@ -277,12 +280,8 @@ impl eframe::App for App {
                     self.toggle_pin(orig_idx);
                     return;
                 }
-                if ctrl_t && self.entries[orig_idx].pinned {
-                    // Start tagging this entry
-                    self.tag_input = self.entries[orig_idx]
-                        .tag
-                        .clone()
-                        .unwrap_or_default();
+                if ctrl_t {
+                    self.tag_input = self.entries[orig_idx].tag.clone().unwrap_or_default();
                     self.tagging = Some(orig_idx);
                 }
             }
@@ -364,14 +363,24 @@ impl eframe::App for App {
 
                 if filtered.is_empty() {
                     ui.centered_and_justified(|ui| {
+                        let msg = if let Some(err) = &self.daemon_error {
+                            format!(
+                                "Cannot connect to yoinkerd: {}\nHint: yoinker daemon start",
+                                err
+                            )
+                        } else if self.entries.is_empty() {
+                            "Clipboard history is empty".to_string()
+                        } else {
+                            "No matches".to_string()
+                        };
                         ui.label(
-                            egui::RichText::new(if self.entries.is_empty() {
-                                "Clipboard history is empty"
-                            } else {
-                                "No matches"
-                            })
-                            .color(egui::Color32::GRAY)
-                            .size(14.0),
+                            egui::RichText::new(msg)
+                                .color(if self.daemon_error.is_some() {
+                                    egui::Color32::from_rgb(200, 100, 100)
+                                } else {
+                                    egui::Color32::GRAY
+                                })
+                                .size(14.0),
                         );
                     });
                 } else {
@@ -409,9 +418,7 @@ impl eframe::App for App {
                                         ui.horizontal(|ui| {
                                             let text_resp = ui
                                                 .vertical(|ui| {
-                                                    ui.set_min_width(
-                                                        ui.available_width() - 60.0,
-                                                    );
+                                                    ui.set_min_width(ui.available_width() - 60.0);
 
                                                     let text_color = if is_pinned {
                                                         egui::Color32::from_rgb(130, 200, 220)
@@ -419,10 +426,9 @@ impl eframe::App for App {
                                                         egui::Color32::from_rgb(210, 210, 210)
                                                     };
 
-                                                    let mut label =
-                                                        egui::RichText::new(&preview)
-                                                            .color(text_color)
-                                                            .size(13.0);
+                                                    let mut label = egui::RichText::new(&preview)
+                                                        .color(text_color)
+                                                        .size(13.0);
                                                     if is_pinned {
                                                         label = label.strong();
                                                     }
@@ -437,51 +443,43 @@ impl eframe::App for App {
                                                         if is_pinned {
                                                             ui.label(
                                                                 egui::RichText::new("pinned")
-                                                                    .color(
-                                                                        egui::Color32::from_rgb(
-                                                                            100, 180, 200,
-                                                                        ),
-                                                                    )
+                                                                    .color(egui::Color32::from_rgb(
+                                                                        100, 180, 200,
+                                                                    ))
                                                                     .size(10.0),
                                                             );
                                                         }
                                                         if let Some(t) = &tag {
                                                             ui.label(
-                                                                egui::RichText::new(format!("#{}", t))
-                                                                    .color(
-                                                                        egui::Color32::from_rgb(
-                                                                            180, 160, 100,
-                                                                        ),
-                                                                    )
-                                                                    .size(10.0)
-                                                                    .strong(),
+                                                                egui::RichText::new(format!(
+                                                                    "#{}",
+                                                                    t
+                                                                ))
+                                                                .color(egui::Color32::from_rgb(
+                                                                    180, 160, 100,
+                                                                ))
+                                                                .size(10.0)
+                                                                .strong(),
                                                             );
                                                         }
                                                     });
                                                 })
                                                 .response;
 
-                                            if text_resp
-                                                .interact(egui::Sense::click())
-                                                .clicked()
-                                            {
+                                            if text_resp.interact(egui::Sense::click()).clicked() {
                                                 action_select = Some(orig_idx);
                                             }
 
                                             // Action buttons
                                             ui.with_layout(
-                                                egui::Layout::right_to_left(
-                                                    egui::Align::Center,
-                                                ),
+                                                egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| {
                                                     if ui
                                                         .small_button(
                                                             egui::RichText::new("x")
-                                                                .color(
-                                                                    egui::Color32::from_rgb(
-                                                                        180, 80, 80,
-                                                                    ),
-                                                                )
+                                                                .color(egui::Color32::from_rgb(
+                                                                    180, 80, 80,
+                                                                ))
                                                                 .size(12.0),
                                                         )
                                                         .on_hover_text("Delete")
@@ -489,19 +487,14 @@ impl eframe::App for App {
                                                     {
                                                         action_delete = Some(orig_idx);
                                                     }
-                                                    let pin_label = if is_pinned {
-                                                        "unpin"
-                                                    } else {
-                                                        "pin"
-                                                    };
+                                                    let pin_label =
+                                                        if is_pinned { "unpin" } else { "pin" };
                                                     if ui
                                                         .small_button(
                                                             egui::RichText::new(pin_label)
-                                                                .color(
-                                                                    egui::Color32::from_rgb(
-                                                                        100, 180, 200,
-                                                                    ),
-                                                                )
+                                                                .color(egui::Color32::from_rgb(
+                                                                    100, 180, 200,
+                                                                ))
                                                                 .size(12.0),
                                                         )
                                                         .on_hover_text(if is_pinned {
@@ -557,7 +550,6 @@ impl eframe::App for App {
                         self.select_entry(idx);
                     }
                 }
-
             });
 
         // Tag input modal
@@ -583,9 +575,7 @@ impl eframe::App for App {
                             .desired_width(200.0),
                     );
                     resp.request_focus();
-                    if resp.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
+                    if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         submit = true;
                     }
                     ui.add_space(4.0);
@@ -619,6 +609,56 @@ impl eframe::App for App {
     }
 }
 
+fn find_yoinkerd() -> PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let candidate = dir.join("yoinkerd");
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("yoinkerd")
+}
+
+async fn send_with_autostart(config: &Config) -> Result<Vec<ClipboardEntry>, String> {
+    // Try direct connection first
+    if let Ok(Response::Entries(e)) = send(config, Request::List).await {
+        return Ok(e);
+    }
+
+    // Try starting the daemon
+    let yoinkerd = find_yoinkerd();
+    let log_path = config
+        .history_path
+        .parent()
+        .map(|p| p.join("yoinkerd.log"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/yoinkerd.log"));
+
+    if let Some(parent) = log_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    let log_file = std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
+
+    std::process::Command::new(&yoinkerd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::from(log_file))
+        .spawn()
+        .map_err(|e| format!("cannot start yoinkerd: {}", e))?;
+
+    // Wait for daemon to be ready
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Ok(Response::Entries(e)) = send(config, Request::List).await {
+            return Ok(e);
+        }
+    }
+
+    Err("daemon started but not responding".to_string())
+}
+
 async fn send(config: &Config, request: Request) -> Result<Response, String> {
     let stream = UnixStream::connect(&config.socket_path)
         .await
@@ -631,10 +671,7 @@ async fn send(config: &Config, request: Request) -> Result<Response, String> {
         .write_all(json.as_bytes())
         .await
         .map_err(|e| e.to_string())?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|e| e.to_string())?;
+    writer.write_all(b"\n").await.map_err(|e| e.to_string())?;
     writer.shutdown().await.map_err(|e| e.to_string())?;
 
     let mut reader = BufReader::new(reader);

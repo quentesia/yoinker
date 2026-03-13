@@ -50,10 +50,7 @@ pub async fn run(history: Arc<Mutex<ClipboardHistory>>, config: Config) {
     }
 }
 
-async fn handle_request(
-    req: Request,
-    history: &Arc<Mutex<ClipboardHistory>>,
-) -> Response {
+async fn handle_request(req: Request, history: &Arc<Mutex<ClipboardHistory>>) -> Response {
     let mut history = history.lock().await;
 
     match req {
@@ -124,9 +121,7 @@ async fn handle_request(
 fn set_clipboard(content: &EntryContent) -> Result<(), String> {
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
     match content {
-        EntryContent::Text { text } => {
-            clipboard.set_text(text).map_err(|e| e.to_string())
-        }
+        EntryContent::Text { text } => clipboard.set_text(text).map_err(|e| e.to_string()),
         EntryContent::Image {
             width,
             height,

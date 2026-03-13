@@ -58,7 +58,9 @@ Place config at `~/.config/yoinker/config.toml`. See `config.example.toml` for a
 ```toml
 max_history = 50
 poll_interval_ms = 500
-max_entry_bytes = 10485760
+max_entry_bytes = 10485760  # 10 MB, 0 = unlimited
+socket_path = "/run/user/1000/yoinker.sock"  # default: $XDG_RUNTIME_DIR/yoinker.sock
+history_path = "/home/user/.local/share/yoinker/history.json"  # default: $XDG_DATA_HOME/yoinker/history.json
 ```
 
 ## CLI Reference
@@ -76,6 +78,18 @@ max_entry_bytes = 10485760
 | `yoinker daemon stop` | Stop daemon (SIGTERM) |
 | `yoinker daemon status` | Check daemon status |
 | `yoinker completions <SHELL>` | Generate shell completions |
+
+## GUI Picker
+
+A native GUI picker (`yoinker-gui`) can be triggered with a global keybind. It auto-starts the daemon if needed.
+
+```sh
+cargo install --path yoinker-gui
+```
+
+Bind `yoinker-gui` (or `contrib/yoinker-popup.sh`) to a global shortcut (e.g. Super+V) in your DE.
+
+**Keyboard:** Enter=select, Esc=close, Tab/arrows=navigate, Ctrl+D/U=page, Ctrl+P=pin, Ctrl+T=tag, Ctrl+X=delete, Ctrl+L=search
 
 ## Neovim Plugin
 

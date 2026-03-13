@@ -8,7 +8,11 @@ use std::process::Stdio;
 use yoinker_common::{Config, EntryContent, Request, Response};
 
 #[derive(Parser)]
-#[command(name = "yoinker", about = "Terminal clipboard manager for Linux", version)]
+#[command(
+    name = "yoinker",
+    about = "Terminal clipboard manager for Linux",
+    version
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -269,14 +273,12 @@ async fn main() {
                 _ => eprintln!("unexpected response"),
             }
         }
-        Commands::Clear => {
-            match send_with_autostart(&config, Request::Clear).await {
-                Ok(Response::Ok) => eprintln!("cleared unpinned history"),
-                Ok(Response::Error(e)) => eprintln!("error: {}", e),
-                Err(e) => print_connection_error(&e),
-                _ => eprintln!("unexpected response"),
-            }
-        }
+        Commands::Clear => match send_with_autostart(&config, Request::Clear).await {
+            Ok(Response::Ok) => eprintln!("cleared unpinned history"),
+            Ok(Response::Error(e)) => eprintln!("error: {}", e),
+            Err(e) => print_connection_error(&e),
+            _ => eprintln!("unexpected response"),
+        },
         Commands::Store { content, pin } => {
             match send_with_autostart(&config, Request::Store { content, pin }).await {
                 Ok(Response::Ok) => eprintln!("stored"),
@@ -301,7 +303,12 @@ async fn main() {
             DaemonAction::Status => daemon_status(&config).await,
         },
         Commands::Completions { shell } => {
-            generate(shell, &mut Cli::command(), "yoinker", &mut std::io::stdout());
+            generate(
+                shell,
+                &mut Cli::command(),
+                "yoinker",
+                &mut std::io::stdout(),
+            );
         }
     }
 }
