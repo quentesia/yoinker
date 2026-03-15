@@ -8,6 +8,8 @@ Type=simple
 ExecStart=/usr/local/bin/yoinkerd
 Restart=on-failure
 RestartSec=3
+Environment=DISPLAY=:1
+Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
 
 [Install]
 WantedBy=default.target

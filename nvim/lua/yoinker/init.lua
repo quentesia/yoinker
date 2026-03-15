@@ -93,7 +93,7 @@ function M.store_selection(pin)
   -- Get visual selection
   local start_pos = vim.fn.getpos("'<")
   local end_pos = vim.fn.getpos("'>")
-  local lines = vim.fn.getregion(start_pos, end_pos, { type = vim.fn.visualmode() })
+  local lines = vim.fn.getregion(start_pos, end_pos, { mode = vim.fn.visualmode() })
   local text = table.concat(lines, "\n")
 
   if text == "" then
